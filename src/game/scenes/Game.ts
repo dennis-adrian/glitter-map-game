@@ -26,6 +26,14 @@ export class Game extends Scene {
     right: Phaser.Input.Keyboard.Key;
   };
 
+  // Touch movement
+  private touchStartX = 0;
+  private touchStartY = 0;
+  private touchActive = false;
+  private touchDeltaX = 0;
+  private touchDeltaY = 0;
+  private readonly TOUCH_DEADZONE = 12;
+
   // Stands
   private standsLayer!: Phaser.Tilemaps.ObjectLayer;
   private activeStand: string | null = null;
@@ -210,6 +218,9 @@ export class Game extends Scene {
 
   private async openStandPopup(standId: string) {
     this.isPopupOpen = true;
+    this.touchActive = false;
+    this.touchDeltaX = 0;
+    this.touchDeltaY = 0;
     this.player.setVelocity(0, 0); // stop the player
 
     // Check cache first
@@ -337,6 +348,28 @@ export class Game extends Scene {
     this.input.keyboard!.on("keydown-ESC", () => {
       if (this.isPopupOpen) this.closePopup();
     });
+
+    // Touch / drag-to-move
+    this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      if (this.isPopupOpen) return;
+      this.touchActive = true;
+      this.touchStartX = pointer.x;
+      this.touchStartY = pointer.y;
+      this.touchDeltaX = 0;
+      this.touchDeltaY = 0;
+    });
+
+    this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
+      if (!this.touchActive || !pointer.isDown) return;
+      this.touchDeltaX = pointer.x - this.touchStartX;
+      this.touchDeltaY = pointer.y - this.touchStartY;
+    });
+
+    this.input.on("pointerup", () => {
+      this.touchActive = false;
+      this.touchDeltaX = 0;
+      this.touchDeltaY = 0;
+    });
   }
 
   // ─── UPDATE ──────────────────────────────────────────────────────────────
@@ -352,10 +385,15 @@ export class Game extends Scene {
   }
 
   private handleMovement() {
-    const up = this.cursors.up.isDown || this.wasd.up.isDown;
-    const down = this.cursors.down.isDown || this.wasd.down.isDown;
-    const left = this.cursors.left.isDown || this.wasd.left.isDown;
-    const right = this.cursors.right.isDown || this.wasd.right.isDown;
+    const touchUp    = this.touchActive && this.touchDeltaY < -this.TOUCH_DEADZONE;
+    const touchDown  = this.touchActive && this.touchDeltaY >  this.TOUCH_DEADZONE;
+    const touchLeft  = this.touchActive && this.touchDeltaX < -this.TOUCH_DEADZONE;
+    const touchRight = this.touchActive && this.touchDeltaX >  this.TOUCH_DEADZONE;
+
+    const up    = this.cursors.up.isDown    || this.wasd.up.isDown    || touchUp;
+    const down  = this.cursors.down.isDown  || this.wasd.down.isDown  || touchDown;
+    const left  = this.cursors.left.isDown  || this.wasd.left.isDown  || touchLeft;
+    const right = this.cursors.right.isDown || this.wasd.right.isDown || touchRight;
 
     // Reset velocity each frame
     this.player.setVelocity(0, 0);
