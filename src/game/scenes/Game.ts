@@ -328,6 +328,11 @@ export class Game extends Scene {
     this.standPopup.setVisible(false);
     this.isPopupOpen = false;
     this.activeStand = null;
+
+    // Prevent accidental movement after closing
+    this.touchActive = false;
+    this.touchDeltaX = 0;
+    this.touchDeltaY = 0;
   }
 
   // ─── INPUT ───────────────────────────────────────────────────────────────
@@ -351,8 +356,10 @@ export class Game extends Scene {
 
     // Touch / drag-to-move
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      if (pointer.id !== 1) return; // ignore any finger after the first
       if (this.isPopupOpen) return;
-      this.touchActive = true;
+
+      this.touchActive = false; // don't activate yet — wait to see if it's a drag
       this.touchStartX = pointer.x;
       this.touchStartY = pointer.y;
       this.touchDeltaX = 0;
@@ -365,7 +372,21 @@ export class Game extends Scene {
       this.touchDeltaY = pointer.y - this.touchStartY;
     });
 
+    // Only activate movement once the finger has actually dragged past the deadzone
+    if (
+      Math.abs(this.touchDeltaX) > this.TOUCH_DEADZONE ||
+      Math.abs(this.touchDeltaY) > this.TOUCH_DEADZONE
+    ) {
+      this.touchActive = true;
+    }
+
     this.input.on("pointerup", () => {
+      this.touchActive = false;
+      this.touchDeltaX = 0;
+      this.touchDeltaY = 0;
+    });
+
+    this.input.on("pointerout", () => {
       this.touchActive = false;
       this.touchDeltaX = 0;
       this.touchDeltaY = 0;
@@ -385,36 +406,36 @@ export class Game extends Scene {
   }
 
   private handleMovement() {
-    const touchUp    = this.touchActive && this.touchDeltaY < -this.TOUCH_DEADZONE;
-    const touchDown  = this.touchActive && this.touchDeltaY >  this.TOUCH_DEADZONE;
-    const touchLeft  = this.touchActive && this.touchDeltaX < -this.TOUCH_DEADZONE;
-    const touchRight = this.touchActive && this.touchDeltaX >  this.TOUCH_DEADZONE;
+    const touchUp = this.touchActive && this.touchDeltaY < -this.TOUCH_DEADZONE;
+    const touchDown =
+      this.touchActive && this.touchDeltaY > this.TOUCH_DEADZONE;
+    const touchLeft =
+      this.touchActive && this.touchDeltaX < -this.TOUCH_DEADZONE;
+    const touchRight =
+      this.touchActive && this.touchDeltaX > this.TOUCH_DEADZONE;
 
-    const up    = this.cursors.up.isDown    || this.wasd.up.isDown    || touchUp;
-    const down  = this.cursors.down.isDown  || this.wasd.down.isDown  || touchDown;
-    const left  = this.cursors.left.isDown  || this.wasd.left.isDown  || touchLeft;
-    const right = this.cursors.right.isDown || this.wasd.right.isDown || touchRight;
+    const up = this.cursors.up.isDown || this.wasd.up.isDown || touchUp;
+    const down = this.cursors.down.isDown || this.wasd.down.isDown || touchDown;
+    const left = this.cursors.left.isDown || this.wasd.left.isDown || touchLeft;
+    const right =
+      this.cursors.right.isDown || this.wasd.right.isDown || touchRight;
 
     // Reset velocity each frame
     this.player.setVelocity(0, 0);
 
-    if (left) {
-      this.player.setVelocityX(-this.PLAYER_SPEED);
-      this.player.anims.play("walk-left", true);
-    } else if (right) {
-      this.player.setVelocityX(this.PLAYER_SPEED);
-      this.player.anims.play("walk-right", true);
-    } else if (up) {
-      this.player.setVelocityY(-this.PLAYER_SPEED);
-      this.player.anims.play("walk-up", true);
-    } else if (down) {
-      this.player.setVelocityY(this.PLAYER_SPEED);
-      this.player.anims.play("walk-down", true);
-    } else {
-      this.player.anims.play("idle", true);
-    }
+    if (left) this.player.setVelocityX(-this.PLAYER_SPEED);
+    if (right) this.player.setVelocityX(this.PLAYER_SPEED);
+    if (up) this.player.setVelocityY(-this.PLAYER_SPEED);
+    if (down) this.player.setVelocityY(this.PLAYER_SPEED);
 
     // Normalize diagonal movement
     this.player.body?.velocity.normalize().scale(this.PLAYER_SPEED);
+
+    // Handle animation (prioritize horizontal for diagonals)
+    if (left) this.player.anims.play("walk-left", true);
+    else if (right) this.player.anims.play("walk-right", true);
+    else if (up) this.player.anims.play("walk-up", true);
+    else if (down) this.player.anims.play("walk-down", true);
+    else this.player.anims.play("idle", true);
   }
 }
