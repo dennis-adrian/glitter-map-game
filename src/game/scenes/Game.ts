@@ -32,7 +32,11 @@ export class Game extends Scene {
   private touchActive = false;
   private touchDeltaX = 0;
   private touchDeltaY = 0;
-  private readonly TOUCH_DEADZONE = 12;
+  private touchDeadzone = 12; // computed from screen size in create()
+  private touchDecay = 0; // 1.0 → 0 over several frames after finger lift
+  private readonly TOUCH_DECAY_RATE = 0.12;
+  private lastMoveByTouch = false;
+  private dragIndicator: Phaser.GameObjects.Arc | null = null;
 
   // Stands
   private standsLayer!: Phaser.Tilemaps.ObjectLayer;
@@ -70,6 +74,7 @@ export class Game extends Scene {
     this.createCamera();
     this.createStandInteractions();
     this.createUI();
+    this.touchDeadzone = Math.min(this.scale.width, this.scale.height) * 0.025;
     this.setupInput();
   }
 
@@ -219,8 +224,10 @@ export class Game extends Scene {
   private async openStandPopup(standId: string) {
     this.isPopupOpen = true;
     this.touchActive = false;
+    this.touchDecay = 0;
     this.touchDeltaX = 0;
     this.touchDeltaY = 0;
+    this.dragIndicator?.setVisible(false);
     this.player.setVelocity(0, 0); // stop the player
 
     // Check cache first
@@ -257,6 +264,13 @@ export class Game extends Scene {
     this.standPopup = this.add
       .container(0, 0)
       .setScrollFactor(0)
+      .setVisible(false);
+
+    // Drag indicator - follows pointer position while dragging
+    this.dragIndicator = this.add
+      .circle(0, 0, 24, 0xffffff, 0.25)
+      .setScrollFactor(0)
+      .setDepth(10)
       .setVisible(false);
   }
 
@@ -328,11 +342,11 @@ export class Game extends Scene {
     this.standPopup.setVisible(false);
     this.isPopupOpen = false;
     this.activeStand = null;
-
-    // Prevent accidental movement after closing
     this.touchActive = false;
+    this.touchDecay = 0;
     this.touchDeltaX = 0;
     this.touchDeltaY = 0;
+    this.dragIndicator?.setVisible(false);
   }
 
   // ─── INPUT ───────────────────────────────────────────────────────────────
@@ -356,40 +370,36 @@ export class Game extends Scene {
 
     // Touch / drag-to-move
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
-      if (pointer.id !== 1) return; // ignore any finger after the first
       if (this.isPopupOpen) return;
-
-      this.touchActive = false; // don't activate yet — wait to see if it's a drag
+      this.touchActive = true;
+      this.touchDecay = 0;
+      this.lastMoveByTouch = true;
       this.touchStartX = pointer.x;
       this.touchStartY = pointer.y;
       this.touchDeltaX = 0;
       this.touchDeltaY = 0;
+      this.dragIndicator?.setPosition(pointer.x, pointer.y).setVisible(true);
     });
 
     this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
-      if (!this.touchActive || !pointer.isDown) return;
+      if (!this.touchActive) return;
       this.touchDeltaX = pointer.x - this.touchStartX;
       this.touchDeltaY = pointer.y - this.touchStartY;
+      this.dragIndicator?.setPosition(pointer.x, pointer.y);
     });
-
-    // Only activate movement once the finger has actually dragged past the deadzone
-    if (
-      Math.abs(this.touchDeltaX) > this.TOUCH_DEADZONE ||
-      Math.abs(this.touchDeltaY) > this.TOUCH_DEADZONE
-    ) {
-      this.touchActive = true;
-    }
 
     this.input.on("pointerup", () => {
       this.touchActive = false;
-      this.touchDeltaX = 0;
-      this.touchDeltaY = 0;
+      this.touchDecay = 1.0; // begin deceleration — deltas preserved briefly
+      this.dragIndicator?.setVisible(false);
     });
 
     this.input.on("pointerout", () => {
       this.touchActive = false;
+      this.touchDecay = 0;
       this.touchDeltaX = 0;
       this.touchDeltaY = 0;
+      this.dragIndicator?.setVisible(false);
     });
   }
 
@@ -406,21 +416,33 @@ export class Game extends Scene {
   }
 
   private handleMovement() {
-    const touchUp = this.touchActive && this.touchDeltaY < -this.TOUCH_DEADZONE;
-    const touchDown =
-      this.touchActive && this.touchDeltaY > this.TOUCH_DEADZONE;
-    const touchLeft =
-      this.touchActive && this.touchDeltaX < -this.TOUCH_DEADZONE;
-    const touchRight =
-      this.touchActive && this.touchDeltaX > this.TOUCH_DEADZONE;
+    // Decay touch velocity each frame after finger lift
+    if (!this.touchActive && this.touchDecay > 0) {
+      this.touchDecay = Math.max(0, this.touchDecay - this.TOUCH_DECAY_RATE);
+      if (this.touchDecay === 0) {
+        this.touchDeltaX = 0;
+        this.touchDeltaY = 0;
+      }
+    }
 
-    const up = this.cursors.up.isDown || this.wasd.up.isDown || touchUp;
-    const down = this.cursors.down.isDown || this.wasd.down.isDown || touchDown;
-    const left = this.cursors.left.isDown || this.wasd.left.isDown || touchLeft;
-    const right =
-      this.cursors.right.isDown || this.wasd.right.isDown || touchRight;
+    const touchActive = this.touchActive || this.touchDecay > 0;
+    const touchUp = touchActive && this.touchDeltaY < -this.touchDeadzone;
+    const touchDown = touchActive && this.touchDeltaY > this.touchDeadzone;
+    const touchLeft = touchActive && this.touchDeltaX < -this.touchDeadzone;
+    const touchRight = touchActive && this.touchDeltaX > this.touchDeadzone;
 
-    // Reset velocity each frame
+    const keyUp = this.cursors.up.isDown || this.wasd.up.isDown;
+    const keyDown = this.cursors.down.isDown || this.wasd.down.isDown;
+    const keyLeft = this.cursors.left.isDown || this.wasd.left.isDown;
+    const keyRight = this.cursors.right.isDown || this.wasd.right.isDown;
+
+    if (keyUp || keyDown || keyLeft || keyRight) this.lastMoveByTouch = false;
+
+    const up = keyUp || touchUp;
+    const down = keyDown || touchDown;
+    const left = keyLeft || touchLeft;
+    const right = keyRight || touchRight;
+
     this.player.setVelocity(0, 0);
 
     if (left) this.player.setVelocityX(-this.PLAYER_SPEED);
@@ -428,10 +450,13 @@ export class Game extends Scene {
     if (up) this.player.setVelocityY(-this.PLAYER_SPEED);
     if (down) this.player.setVelocityY(this.PLAYER_SPEED);
 
-    // Normalize diagonal movement
-    this.player.body?.velocity.normalize().scale(this.PLAYER_SPEED);
+    // Decay only applies when the movement was touch-initiated
+    const speed =
+      this.PLAYER_SPEED *
+      (this.touchActive ? 1 : this.lastMoveByTouch ? this.touchDecay || 1 : 1);
+    this.player.body?.velocity.normalize().scale(speed);
 
-    // Handle animation (prioritize horizontal for diagonals)
+    // Animations — prioritize horizontal for diagonals
     if (left) this.player.anims.play("walk-left", true);
     else if (right) this.player.anims.play("walk-right", true);
     else if (up) this.player.anims.play("walk-up", true);
