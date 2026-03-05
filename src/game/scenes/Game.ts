@@ -11,7 +11,7 @@ interface StandData {
 
 export class Game extends Scene {
   private map!: Phaser.Tilemaps.Tilemap;
-  private tileset!: Phaser.Tilemaps.Tileset;
+  private tilesets!: Phaser.Tilemaps.Tileset[];
   private floorLayer!: Phaser.Tilemaps.TilemapLayer;
   private structuresLayer!: Phaser.Tilemaps.TilemapLayer; // your "Objects" tile layer
 
@@ -36,6 +36,7 @@ export class Game extends Scene {
   private readonly TOUCH_DECAY_RATE = 0.12;
   private lastMoveByTouch = false;
   private dragIndicator: Phaser.GameObjects.Arc | null = null;
+  private uiCamera!: Phaser.Cameras.Scene2D.Camera;
 
   // Stands
   private standsLayer!: Phaser.Tilemaps.ObjectLayer;
@@ -65,6 +66,7 @@ export class Game extends Scene {
     // Load the map and tileset
     this.load.tilemapTiledJSON("map", "assets/map_glitter.json");
     this.load.image("tileset1", "assets/tileset.png");
+    this.load.image("mesas", "assets/mesas.png");
 
     // Load the player spritesheet for the selected character
     // Assumes a 32x52 sprite with 12 frames: 3 per direction (down, left, right, up)
@@ -89,23 +91,28 @@ export class Game extends Scene {
     this.createUI();
     this.touchDeadzone = Math.min(this.scale.width, this.scale.height) * 0.025;
     this.setupInput();
+
+    // Main camera (zoomed) ignores UI; UI camera (1x) ignores the game world
+    this.cameras.main.ignore([this.standPopup, this.backBtnBg, this.backBtnLabel, this.dragIndicator!]);
+    this.uiCamera.ignore([this.floorLayer, this.structuresLayer, this.player]);
   }
 
   private createMap() {
     this.map = this.make.tilemap({ key: "map" });
 
-    // "tileset1" = key from preload, "tileset1" = name inside the .tsx file
-    const tileset = this.map.addTilesetImage("tileset1", "tileset1");
-    if (!tileset) throw new Error("Failed to load tileset");
-    this.tileset = tileset;
+    const tileset1 = this.map.addTilesetImage("tileset1", "tileset1");
+    if (!tileset1) throw new Error("Failed to load tileset1");
 
-    // Create tile layers — names must match exactly what's in your .tmj
-    this.floorLayer = this.map.createLayer("Floor", this.tileset, 0, 0)!;
+    const mesas = this.map.addTilesetImage("mesas", "mesas");
+    if (!mesas) throw new Error("Failed to load mesas tileset");
 
-    // Your booth/wall tile layer
+    this.tilesets = [tileset1, mesas];
+
+    this.floorLayer = this.map.createLayer("Floor", this.tilesets, 0, 0)!;
+
     this.structuresLayer = this.map.createLayer(
       "Structures",
-      this.tileset,
+      this.tilesets,
       0,
       0,
     )!;
@@ -132,7 +139,6 @@ export class Game extends Scene {
     this.player = this.physics.add
       .sprite(spawnX, spawnY, "player", 0)
       .setOrigin(0, 1)
-      .setScale(2)
       .setDepth(2);
     this.player.setCollideWorldBounds(true);
 
@@ -207,7 +213,10 @@ export class Game extends Scene {
       this.map.widthInPixels,
       this.map.heightInPixels,
     );
-    this.cameras.main.startFollow(this.player, true, 0.1, 0.1); // 0.1 = smooth follow
+    this.cameras.main.setZoom(1.5);
+    this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
+
+    this.uiCamera = this.cameras.add(0, 0, this.scale.width, this.scale.height);
   }
 
   // ─── STAND INTERACTIONS ──────────────────────────────────────────────────
