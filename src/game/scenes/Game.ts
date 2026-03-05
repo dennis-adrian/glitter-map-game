@@ -44,6 +44,8 @@ export class Game extends Scene {
 
   // UI
   private standPopup!: Phaser.GameObjects.Container;
+  private backBtnBg!: Phaser.GameObjects.Rectangle;
+  private backBtnLabel!: Phaser.GameObjects.Text;
   private isPopupOpen = false;
   private closeBtnBounds = { x: 0, y: 0, halfSize: 22 };
   private popupBounds = { top: 0, bottom: 0, left: 0, right: 0 };
@@ -66,7 +68,12 @@ export class Game extends Scene {
 
     // Load the player spritesheet for the selected character
     // Assumes a 32x52 sprite with 12 frames: 3 per direction (down, left, right, up)
-    const char = (this.scene.settings.data as { character?: string })?.character ?? "federico";
+    const char =
+      (this.scene.settings.data as { character?: string })?.character ??
+      "federico";
+    if (this.textures.exists("player")) {
+      this.textures.remove("player");
+    }
     this.load.spritesheet("player", `assets/entities/${char}.png`, {
       frameWidth: 32,
       frameHeight: 52,
@@ -136,6 +143,13 @@ export class Game extends Scene {
   }
 
   private createAnimations() {
+    // Remove stale animations from a previous scene run (texture may have changed)
+    ["walk-down", "walk-left", "walk-right", "walk-up", "idle"].forEach(
+      (key) => {
+        if (this.anims.exists(key)) this.anims.remove(key);
+      },
+    );
+
     // Walk down — frames 0, 1, 2
     this.anims.create({
       key: "walk-down",
@@ -194,7 +208,6 @@ export class Game extends Scene {
       this.map.heightInPixels,
     );
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1); // 0.1 = smooth follow
-    this.cameras.main.setZoom(1.5); // zoom in for mobile readability
   }
 
   // ─── STAND INTERACTIONS ──────────────────────────────────────────────────
@@ -244,6 +257,8 @@ export class Game extends Scene {
       return;
     }
 
+    this.backBtnBg.setVisible(false);
+    this.backBtnLabel.setVisible(false);
     this.showLoading();
 
     // Fetch from your API — replace with your actual Next.js API route
@@ -274,6 +289,28 @@ export class Game extends Scene {
       .container(0, 0)
       .setScrollFactor(0)
       .setVisible(false);
+
+    // Back button — top-left corner, standalone objects on the scene display list
+    // (not inside a Container) so Phaser's input system can hit-test them.
+    this.backBtnBg = this.add
+      .rectangle(12, 12, 120, 40, 0x000000, 0.75)
+      .setStrokeStyle(2, 0xf5a623)
+      .setOrigin(0)
+      .setScrollFactor(0)
+      .setDepth(20)
+      .setInteractive();
+    this.backBtnLabel = this.add
+      .text(20, 32, "< Personajes", { fontSize: "14px", color: "#f5a623" })
+      .setOrigin(0, 0.5)
+      .setScrollFactor(0)
+      .setDepth(21);
+    this.backBtnBg.on("pointerdown", () => this.scene.start("CharacterSelect"));
+    this.backBtnBg.on("pointerover", () =>
+      this.backBtnBg.setFillStyle(0x000000, 1),
+    );
+    this.backBtnBg.on("pointerout", () =>
+      this.backBtnBg.setFillStyle(0x000000, 0.75),
+    );
 
     // Drag indicator - follows pointer position while dragging
     this.dragIndicator = this.add
@@ -494,6 +531,8 @@ export class Game extends Scene {
   private closePopup() {
     this.standPopup.setVisible(false);
     this.isPopupOpen = false;
+    this.backBtnBg.setVisible(true);
+    this.backBtnLabel.setVisible(true);
     // activeStand intentionally NOT reset here — zone-exit detection in update() handles it,
     // preventing the overlap callback from reopening the popup while player stays in the zone
     this.touchActive = false;
