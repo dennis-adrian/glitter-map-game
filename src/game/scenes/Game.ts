@@ -64,9 +64,10 @@ export class Game extends Scene {
     this.load.tilemapTiledJSON("map", "assets/map_glitter.json");
     this.load.image("tileset1", "assets/tileset.png");
 
-    // Load the player spritesheet
-    // Assumes a 32x48 sprite with 12 frames: 3 per direction (down, left, right, up)
-    this.load.spritesheet("player", "assets/entities/federico.png", {
+    // Load the player spritesheet for the selected character
+    // Assumes a 32x52 sprite with 12 frames: 3 per direction (down, left, right, up)
+    const char = (this.scene.settings.data as { character?: string })?.character ?? "federico";
+    this.load.spritesheet("player", `assets/entities/${char}.png`, {
       frameWidth: 32,
       frameHeight: 52,
     });
