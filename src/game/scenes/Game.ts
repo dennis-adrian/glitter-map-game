@@ -7,7 +7,6 @@ interface StandData {
   description: string;
   category: string;
   instagram?: string;
-  photo_url?: string;
 }
 
 export class Game extends Scene {
@@ -46,6 +45,12 @@ export class Game extends Scene {
   // UI
   private standPopup!: Phaser.GameObjects.Container;
   private isPopupOpen = false;
+  private closeBtnBounds = { x: 0, y: 0, halfSize: 22 };
+  private popupBounds = { top: 0, bottom: 0, left: 0, right: 0 };
+
+  // Zone-exit tracking (prevents popup from reopening while player stays in zone)
+  private currentOverlaps = new Set<string>();
+  private previousOverlaps = new Set<string>();
 
   // Constants
   private readonly PLAYER_SPEED = 160;
@@ -61,9 +66,9 @@ export class Game extends Scene {
 
     // Load the player spritesheet
     // Assumes a 32x48 sprite with 12 frames: 3 per direction (down, left, right, up)
-    this.load.spritesheet("player", "assets/entities/character_01_small.png", {
+    this.load.spritesheet("player", "assets/entities/federico.png", {
       frameWidth: 32,
-      frameHeight: 28,
+      frameHeight: 52,
     });
   }
 
@@ -119,7 +124,8 @@ export class Game extends Scene {
     this.player = this.physics.add
       .sprite(spawnX, spawnY, "player", 0)
       .setOrigin(0, 1)
-      .setScale(2);
+      .setScale(2)
+      .setDepth(2);
     this.player.setCollideWorldBounds(true);
 
     // Player hitbox — make it smaller than the sprite for better feel
@@ -213,6 +219,7 @@ export class Game extends Scene {
 
       // When player overlaps a stand zone, trigger the interaction
       this.physics.add.overlap(this.player, zone, () => {
+        if (standObj.name) this.currentOverlaps.add(standObj.name);
         if (!this.isPopupOpen && this.activeStand !== standObj.name) {
           this.activeStand = standObj.name!;
           this.openStandPopup(standObj.name!);
@@ -236,6 +243,8 @@ export class Game extends Scene {
       return;
     }
 
+    this.showLoading();
+
     // Fetch from your API — replace with your actual Next.js API route
     try {
       // const res = await fetch(`/api/stands/${standId}`)ß;
@@ -247,7 +256,6 @@ export class Game extends Scene {
         description: `Description in ${standId}`,
         category: `Category in ${standId}`,
         instagram: `Instagram in ${standId}`,
-        photo_url: `Photo url in ${standId}`,
       };
       this.showPopup(data);
     } catch (err) {
@@ -276,72 +284,217 @@ export class Game extends Scene {
 
   private showPopup(data: StandData) {
     const { width, height } = this.scale;
-
-    // Clear any previous content
     this.standPopup.removeAll(true);
 
-    // Background panel
-    const bg = this.add
-      .rectangle(width / 2, height - 120, width - 32, 200, 0x1a1a2e, 0.95)
-      .setStrokeStyle(2, 0xf5a623);
+    const popupWidth = Math.min(width - 32, 480);
+    const centerX = width / 2;
+    const padding = 16;
+    const bottomMargin = 16;
+    const baseFontSize = Math.min(
+      14,
+      Math.max(11, Math.round(Math.min(width, height) * 0.038)),
+    );
 
-    // Stand name
+    // ── Build content items at relY=0; shifted to final Y after measuring ──────
+    const textItems: Phaser.GameObjects.Text[] = [];
+    let relY = 0;
+
+    // Avatar: colored circle + first initial
+    const avatarRadius = Math.round(baseFontSize * 1.5);
+    const avatarRelCenterY = relY + avatarRadius;
+    const avatar = this.add.circle(
+      centerX,
+      avatarRelCenterY,
+      avatarRadius,
+      0xf5a623,
+      0.25,
+    );
+    const avatarInitial = this.add
+      .text(
+        centerX,
+        avatarRelCenterY,
+        data.participant_name.charAt(0).toUpperCase(),
+        {
+          fontSize: `${Math.round(baseFontSize * 1.2)}px`,
+          color: "#f5a623",
+          fontStyle: "bold",
+        },
+      )
+      .setOrigin(0.5);
+    relY += avatarRadius * 2 + 12;
+
     const nameText = this.add
-      .text(width / 2, height - 195, data.participant_name, {
-        fontSize: "18px",
+      .text(centerX, relY, data.participant_name, {
+        fontSize: `${Math.round(baseFontSize * 1.2)}px`,
         color: "#f5a623",
         fontStyle: "bold",
+        align: "center",
+        wordWrap: { width: popupWidth - padding * 2 },
+      })
+      .setOrigin(0.5, 0);
+    relY += nameText.height + 6;
+    textItems.push(nameText);
+
+    const categoryText = this.add
+      .text(centerX, relY, data.category, {
+        fontSize: `${baseFontSize}px`,
+        color: "#aaaaaa",
+        align: "center",
+      })
+      .setOrigin(0.5, 0);
+    relY += categoryText.height + 10;
+    textItems.push(categoryText);
+
+    const descText = this.add
+      .text(centerX, relY, data.description, {
+        fontSize: `${baseFontSize}px`,
+        color: "#ffffff",
+        wordWrap: { width: popupWidth - padding * 2 },
+        align: "center",
+      })
+      .setOrigin(0.5, 0);
+    relY += descText.height + 8;
+    textItems.push(descText);
+
+    if (data.instagram) {
+      const igText = this.add
+        .text(centerX, relY, `@${data.instagram}`, {
+          fontSize: `${baseFontSize}px`,
+          color: "#c084fc",
+          align: "center",
+        })
+        .setOrigin(0.5, 0);
+      relY += igText.height + 8;
+      textItems.push(igText);
+    }
+
+    // ── Compute popup geometry ──────────────────────────────────────────────────
+    const closeRowHeight = 44;
+    const popupHeight = padding + closeRowHeight + padding + relY + padding;
+    // Clamp so popup never extends above the top of the screen
+    const popupTop = Math.max(
+      bottomMargin,
+      height - popupHeight - bottomMargin,
+    );
+    const popupCenterY = popupTop + popupHeight / 2;
+    const contentStartY = popupTop + padding + closeRowHeight + padding;
+
+    // Shift all content items to final Y positions
+    avatar.setY(avatarRelCenterY + contentStartY);
+    avatarInitial.setY(avatarRelCenterY + contentStartY);
+    for (const item of textItems) {
+      item.setY(item.y + contentStartY);
+    }
+
+    // ── Save bounds for scene-level click handling ─────────────────────────────
+    const closeBtnX = centerX + popupWidth / 2 - padding - 10;
+    const closeBtnY = popupTop + padding + closeRowHeight / 2;
+    this.closeBtnBounds = { x: closeBtnX, y: closeBtnY, halfSize: 22 };
+    this.popupBounds = {
+      top: popupTop,
+      bottom: popupTop + popupHeight,
+      left: centerX - popupWidth / 2,
+      right: centerX + popupWidth / 2,
+    };
+
+    // ── Dim overlay (visual only — clicks handled via scene pointerdown) ────────
+    const overlay = this.add.rectangle(
+      width / 2,
+      height / 2,
+      width,
+      height,
+      0x000000,
+      0.5,
+    );
+
+    // ── Background panel ────────────────────────────────────────────────────────
+    const bg = this.add
+      .rectangle(centerX, popupCenterY, popupWidth, popupHeight, 0x1a1a2e, 0.95)
+      .setStrokeStyle(2, 0xf5a623);
+
+    // ── Close button — visual hit area (clicks handled via scene pointerdown) ───
+    const closeBg = this.add.rectangle(
+      closeBtnX,
+      closeBtnY,
+      44,
+      44,
+      0x333344,
+      0.6,
+    );
+
+    const closeIcon = this.add
+      .text(closeBtnX, closeBtnY, "✕", {
+        fontSize: `${Math.round(baseFontSize * 1.1)}px`,
+        color: "#ffffff",
       })
       .setOrigin(0.5);
 
-    // Category
-    const categoryText = this.add
-      .text(width / 2, height - 172, data.category, {
-        fontSize: "12px",
+    // Z-order: overlay → bg → avatar → content → close
+    this.standPopup.add([
+      overlay,
+      bg,
+      avatar,
+      avatarInitial,
+      ...textItems,
+      closeBg,
+      closeIcon,
+    ]);
+    this.standPopup.setVisible(true);
+  }
+
+  private showLoading() {
+    const { width, height } = this.scale;
+    this.standPopup.removeAll(true);
+
+    const popupWidth = Math.min(width - 32, 480);
+    const popupHeight = 80;
+    const popupTop = height - popupHeight - 16;
+
+    // No close button during loading — point it off-screen so it never matches
+    this.closeBtnBounds = { x: -999, y: -999, halfSize: 22 };
+    this.popupBounds = {
+      top: popupTop,
+      bottom: popupTop + popupHeight,
+      left: width / 2 - popupWidth / 2,
+      right: width / 2 + popupWidth / 2,
+    };
+
+    const overlay = this.add.rectangle(
+      width / 2,
+      height / 2,
+      width,
+      height,
+      0x000000,
+      0.5,
+    );
+
+    const bg = this.add
+      .rectangle(
+        width / 2,
+        popupTop + popupHeight / 2,
+        popupWidth,
+        popupHeight,
+        0x1a1a2e,
+        0.95,
+      )
+      .setStrokeStyle(2, 0xf5a623);
+
+    const loadingText = this.add
+      .text(width / 2, popupTop + popupHeight / 2, "Loading…", {
+        fontSize: "16px",
         color: "#aaaaaa",
       })
       .setOrigin(0.5);
 
-    // Description
-    const descText = this.add
-      .text(width / 2, height - 150, data.description, {
-        fontSize: "13px",
-        color: "#ffffff",
-        wordWrap: { width: width - 64 },
-        align: "center",
-      })
-      .setOrigin(0.5);
-
-    // Instagram
-    const igText = data.instagram
-      ? this.add
-          .text(width / 2, height - 60, `@${data.instagram}`, {
-            fontSize: "12px",
-            color: "#c084fc",
-          })
-          .setOrigin(0.5)
-      : null;
-
-    // Close button
-    const closeBtn = this.add
-      .text(width - 32, height - 210, "✕", {
-        fontSize: "18px",
-        color: "#ffffff",
-      })
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true })
-      .on("pointerdown", () => this.closePopup());
-
-    this.standPopup.add([bg, nameText, categoryText, descText, closeBtn]);
-    if (igText) this.standPopup.add(igText);
-
+    this.standPopup.add([overlay, bg, loadingText]);
     this.standPopup.setVisible(true);
   }
 
   private closePopup() {
     this.standPopup.setVisible(false);
     this.isPopupOpen = false;
-    this.activeStand = null;
+    // activeStand intentionally NOT reset here — zone-exit detection in update() handles it,
+    // preventing the overlap callback from reopening the popup while player stays in the zone
     this.touchActive = false;
     this.touchDecay = 0;
     this.touchDeltaX = 0;
@@ -370,7 +523,20 @@ export class Game extends Scene {
 
     // Touch / drag-to-move
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
-      if (this.isPopupOpen) return;
+      if (this.isPopupOpen) {
+        const onClose =
+          Math.abs(pointer.x - this.closeBtnBounds.x) <=
+            this.closeBtnBounds.halfSize &&
+          Math.abs(pointer.y - this.closeBtnBounds.y) <=
+            this.closeBtnBounds.halfSize;
+        const outside =
+          pointer.x < this.popupBounds.left ||
+          pointer.x > this.popupBounds.right ||
+          pointer.y < this.popupBounds.top ||
+          pointer.y > this.popupBounds.bottom;
+        if (onClose || outside) this.closePopup();
+        return;
+      }
       this.touchActive = true;
       this.touchDecay = 0;
       this.lastMoveByTouch = true;
@@ -406,6 +572,15 @@ export class Game extends Scene {
   // ─── UPDATE ──────────────────────────────────────────────────────────────
 
   update() {
+    // Reset activeStand only when player physically leaves a zone (not on popup close)
+    for (const zone of this.previousOverlaps) {
+      if (!this.currentOverlaps.has(zone) && this.activeStand === zone) {
+        this.activeStand = null;
+      }
+    }
+    this.previousOverlaps = new Set(this.currentOverlaps);
+    this.currentOverlaps.clear();
+
     if (this.isPopupOpen) {
       this.player.setVelocity(0, 0);
       this.player.anims.play("idle", true);
