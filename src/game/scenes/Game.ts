@@ -93,7 +93,12 @@ export class Game extends Scene {
     this.setupInput();
 
     // Main camera (zoomed) ignores UI; UI camera (1x) ignores the game world
-    this.cameras.main.ignore([this.standPopup, this.backBtnBg, this.backBtnLabel, this.dragIndicator!]);
+    this.cameras.main.ignore([
+      this.standPopup,
+      this.backBtnBg,
+      this.backBtnLabel,
+      this.dragIndicator!,
+    ]);
     this.uiCamera.ignore([this.floorLayer, this.structuresLayer, this.player]);
   }
 
@@ -103,7 +108,7 @@ export class Game extends Scene {
     const tileset1 = this.map.addTilesetImage("tileset1", "tileset1");
     if (!tileset1) throw new Error("Failed to load tileset1");
 
-    const mesas = this.map.addTilesetImage("mesas", "mesas");
+    const mesas = this.map.addTilesetImage("booth_test", "mesas");
     if (!mesas) throw new Error("Failed to load mesas tileset");
 
     this.tilesets = [tileset1, mesas];
