@@ -1,12 +1,8 @@
 import { Scene } from "phaser";
+import { type FestivalStand } from "../../types/stands";
 
-// Stand data type — mirrors your Supabase table
-interface StandData {
-  id: string;
-  participant_name: string;
-  description: string;
-  category: string;
-  instagram?: string;
+function standCacheKey(stand: FestivalStand): string {
+  return `stand_${(stand.standLabel ?? "").toLowerCase()}${stand.standNumber}`;
 }
 
 export class Game extends Scene {
@@ -41,7 +37,7 @@ export class Game extends Scene {
   // Stands
   private standsLayer!: Phaser.Tilemaps.ObjectLayer;
   private activeStand: string | null = null;
-  private standDataCache: Map<string, StandData> = new Map();
+  private standDataCache: Map<string, FestivalStand> = new Map();
 
   // UI
   private standPopup!: Phaser.GameObjects.Container;
@@ -80,10 +76,34 @@ export class Game extends Scene {
       frameWidth: 32,
       frameHeight: 52,
     });
+
+    const festivalId =
+      (
+        this.scene.settings.data as { festivalId?: number }
+      )?.festivalId?.toString() ??
+      new URLSearchParams(window.location.search).get("festivalId") ??
+      import.meta.env.VITE_FESTIVAL_ID;
+    if (festivalId) {
+      this.load.json(
+        "festivalStands",
+        `${import.meta.env.VITE_API_BASE_URL}/festivals/${festivalId}/stands`,
+      );
+    }
   }
 
   create() {
     this.createMap();
+    const standsResponse = this.cache.json.get("festivalStands") as
+      | { stands: FestivalStand[]; error?: string }
+      | undefined;
+    if (standsResponse?.error) {
+      console.warn("Failed to load stands:", standsResponse.error);
+    }
+    if (standsResponse?.stands) {
+      for (const stand of standsResponse.stands) {
+        this.standDataCache.set(standCacheKey(stand), stand);
+      }
+    }
     this.createPlayer();
     this.createAnimations();
     this.createCamera();
@@ -256,40 +276,22 @@ export class Game extends Scene {
     });
   }
 
-  private async openStandPopup(standId: string) {
+  private openStandPopup(standId: string) {
     this.isPopupOpen = true;
     this.touchActive = false;
     this.touchDecay = 0;
     this.touchDeltaX = 0;
     this.touchDeltaY = 0;
     this.dragIndicator?.setVisible(false);
-    this.player.setVelocity(0, 0); // stop the player
+    this.player.setVelocity(0, 0);
 
-    // Check cache first
-    if (this.standDataCache.has(standId)) {
-      this.showPopup(this.standDataCache.get(standId)!);
-      return;
-    }
-
-    this.backBtnBg.setVisible(false);
-    this.backBtnLabel.setVisible(false);
-    this.showLoading();
-
-    // Fetch from your API — replace with your actual Next.js API route
-    try {
-      // const res = await fetch(`/api/stands/${standId}`)ß;
-      // const data: StandData = await res.json();
-      // this.standDataCache.set(standId, data); // cache it
-      const data: StandData = {
-        id: standId,
-        participant_name: `Participant name in ${standId}`,
-        description: `Description in ${standId}`,
-        category: `Category in ${standId}`,
-        instagram: `Instagram in ${standId}`,
-      };
+    const data = this.standDataCache.get(standId);
+    if (data) {
+      this.backBtnBg.setVisible(false);
+      this.backBtnLabel.setVisible(false);
       this.showPopup(data);
-    } catch (err) {
-      console.error("Failed to fetch stand data:", err);
+    } else {
+      // No API data for this stand — reset state silently
       this.isPopupOpen = false;
       this.activeStand = null;
     }
@@ -334,7 +336,7 @@ export class Game extends Scene {
       .setVisible(false);
   }
 
-  private showPopup(data: StandData) {
+  private showPopup(data: FestivalStand) {
     const { width, height } = this.scale;
     this.standPopup.removeAll(true);
 
@@ -348,82 +350,105 @@ export class Game extends Scene {
     );
 
     // ── Build content items at relY=0; shifted to final Y after measuring ──────
-    const textItems: Phaser.GameObjects.Text[] = [];
+    const contentItems: Phaser.GameObjects.GameObject[] = [];
     let relY = 0;
 
-    // Avatar: colored circle + first initial
-    const avatarRadius = Math.round(baseFontSize * 1.5);
-    const avatarRelCenterY = relY + avatarRadius;
-    const avatar = this.add.circle(
-      centerX,
-      avatarRelCenterY,
-      avatarRadius,
-      0xf5a623,
-      0.25,
-    );
-    const avatarInitial = this.add
-      .text(
-        centerX,
-        avatarRelCenterY,
-        data.participant_name.charAt(0).toUpperCase(),
-        {
-          fontSize: `${Math.round(baseFontSize * 1.2)}px`,
-          color: "#f5a623",
-          fontStyle: "bold",
-        },
-      )
-      .setOrigin(0.5);
-    relY += avatarRadius * 2 + 12;
-
-    const nameText = this.add
-      .text(centerX, relY, data.participant_name, {
-        fontSize: `${Math.round(baseFontSize * 1.2)}px`,
+    // Stand title
+    const titleText = this.add
+      .text(centerX, relY, data.standDisplayLabel, {
+        fontSize: `${Math.round(baseFontSize * 1.3)}px`,
         color: "#f5a623",
         fontStyle: "bold",
         align: "center",
         wordWrap: { width: popupWidth - padding * 2 },
       })
       .setOrigin(0.5, 0);
-    relY += nameText.height + 6;
-    textItems.push(nameText);
+    relY += titleText.height + 14;
+    contentItems.push(titleText);
 
-    const categoryText = this.add
-      .text(centerX, relY, data.category, {
-        fontSize: `${baseFontSize}px`,
-        color: "#aaaaaa",
-        align: "center",
-      })
-      .setOrigin(0.5, 0);
-    relY += categoryText.height + 10;
-    textItems.push(categoryText);
+    // Each participant
+    data.participants.forEach((participant, index) => {
+      // Divider between participants
+      if (index > 0) {
+        const divider = this.add.rectangle(
+          centerX,
+          relY + 6,
+          popupWidth - padding * 4,
+          1,
+          0x444455,
+          0.8,
+        );
+        relY += 14;
+        contentItems.push(divider);
+      }
 
-    const descText = this.add
-      .text(centerX, relY, data.description, {
-        fontSize: `${baseFontSize}px`,
-        color: "#ffffff",
-        wordWrap: { width: popupWidth - padding * 2 },
-        align: "center",
-      })
-      .setOrigin(0.5, 0);
-    relY += descText.height + 8;
-    textItems.push(descText);
-
-    if (data.instagram) {
-      const igText = this.add
-        .text(centerX, relY, `@${data.instagram}`, {
-          fontSize: `${baseFontSize}px`,
-          color: "#c084fc",
-          align: "center",
+      // Avatar circle + initial
+      const avatarRadius = Math.round(baseFontSize * 1.5);
+      const avatarRelCenterY = relY + avatarRadius;
+      const initial = (participant.displayName ?? "?").charAt(0).toUpperCase();
+      const avatar = this.add.circle(
+        centerX,
+        avatarRelCenterY,
+        avatarRadius,
+        0xf5a623,
+        0.25,
+      );
+      const avatarInitial = this.add
+        .text(centerX, avatarRelCenterY, initial, {
+          fontSize: `${Math.round(baseFontSize * 1.2)}px`,
+          color: "#f5a623",
+          fontStyle: "bold",
         })
-        .setOrigin(0.5, 0);
-      relY += igText.height + 8;
-      textItems.push(igText);
-    }
+        .setOrigin(0.5);
+      relY += avatarRadius * 2 + 10;
+      contentItems.push(avatar, avatarInitial);
+
+      if (participant.displayName) {
+        const nameText = this.add
+          .text(centerX, relY, participant.displayName, {
+            fontSize: `${Math.round(baseFontSize * 1.1)}px`,
+            color: "#f5a623",
+            fontStyle: "bold",
+            align: "center",
+            wordWrap: { width: popupWidth - padding * 2 },
+          })
+          .setOrigin(0.5, 0);
+        relY += nameText.height + 4;
+        contentItems.push(nameText);
+      }
+
+      if (participant.category) {
+        const categoryText = this.add
+          .text(centerX, relY, participant.category, {
+            fontSize: `${baseFontSize}px`,
+            color: "#aaaaaa",
+            align: "center",
+          })
+          .setOrigin(0.5, 0);
+        relY += categoryText.height + 6;
+        contentItems.push(categoryText);
+      }
+
+      for (const social of participant.socials) {
+        const color =
+          social.type.toLowerCase() === "instagram" ? "#c084fc" : "#ffffff";
+        const socialText = this.add
+          .text(centerX, relY, `@${social.username}`, {
+            fontSize: `${baseFontSize}px`,
+            color,
+            align: "center",
+          })
+          .setOrigin(0.5, 0);
+        relY += socialText.height + 4;
+        contentItems.push(socialText);
+      }
+
+      relY += 6;
+    });
 
     // ── Compute popup geometry ──────────────────────────────────────────────────
     const closeRowHeight = 44;
     const popupHeight = padding + closeRowHeight + padding + relY + padding;
-    // Clamp so popup never extends above the top of the screen
     const popupTop = Math.max(
       bottomMargin,
       height - popupHeight - bottomMargin,
@@ -432,10 +457,14 @@ export class Game extends Scene {
     const contentStartY = popupTop + padding + closeRowHeight + padding;
 
     // Shift all content items to final Y positions
-    avatar.setY(avatarRelCenterY + contentStartY);
-    avatarInitial.setY(avatarRelCenterY + contentStartY);
-    for (const item of textItems) {
-      item.setY(item.y + contentStartY);
+    for (const item of contentItems) {
+      if (
+        item instanceof Phaser.GameObjects.Text ||
+        item instanceof Phaser.GameObjects.Arc ||
+        item instanceof Phaser.GameObjects.Rectangle
+      ) {
+        item.setY(item.y + contentStartY);
+      }
     }
 
     // ── Save bounds for scene-level click handling ─────────────────────────────
@@ -449,7 +478,7 @@ export class Game extends Scene {
       right: centerX + popupWidth / 2,
     };
 
-    // ── Dim overlay (visual only — clicks handled via scene pointerdown) ────────
+    // ── Dim overlay ────────────────────────────────────────────────────────────
     const overlay = this.add.rectangle(
       width / 2,
       height / 2,
@@ -459,12 +488,12 @@ export class Game extends Scene {
       0.5,
     );
 
-    // ── Background panel ────────────────────────────────────────────────────────
+    // ── Background panel ───────────────────────────────────────────────────────
     const bg = this.add
       .rectangle(centerX, popupCenterY, popupWidth, popupHeight, 0x1a1a2e, 0.95)
       .setStrokeStyle(2, 0xf5a623);
 
-    // ── Close button — visual hit area (clicks handled via scene pointerdown) ───
+    // ── Close button ───────────────────────────────────────────────────────────
     const closeBg = this.add.rectangle(
       closeBtnX,
       closeBtnY,
@@ -473,7 +502,6 @@ export class Game extends Scene {
       0x333344,
       0.6,
     );
-
     const closeIcon = this.add
       .text(closeBtnX, closeBtnY, "✕", {
         fontSize: `${Math.round(baseFontSize * 1.1)}px`,
@@ -481,16 +509,7 @@ export class Game extends Scene {
       })
       .setOrigin(0.5);
 
-    // Z-order: overlay → bg → avatar → content → close
-    this.standPopup.add([
-      overlay,
-      bg,
-      avatar,
-      avatarInitial,
-      ...textItems,
-      closeBg,
-      closeIcon,
-    ]);
+    this.standPopup.add([overlay, bg, ...contentItems, closeBg, closeIcon]);
     this.standPopup.setVisible(true);
   }
 

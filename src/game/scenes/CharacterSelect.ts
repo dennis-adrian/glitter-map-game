@@ -21,6 +21,7 @@ export class CharacterSelect extends Scene {
   private cards: Phaser.GameObjects.Container[] = [];
   private container!: Phaser.GameObjects.Container;
   private playBtn!: Phaser.GameObjects.Container;
+  private festivalId!: number;
 
   constructor() {
     super("CharacterSelect");
@@ -36,6 +37,13 @@ export class CharacterSelect extends Scene {
   }
 
   create() {
+    this.festivalId =
+      (this.scene.settings.data as { festivalId?: number })?.festivalId ??
+      Number(
+        new URLSearchParams(window.location.search).get("festivalId") ??
+          import.meta.env.VITE_FESTIVAL_ID,
+      );
+
     this.buildAnimations();
     this.buildUI();
 
@@ -66,6 +74,19 @@ export class CharacterSelect extends Scene {
     const { width, height } = this.scale;
 
     this.add.rectangle(0, 0, width, height, COLOR_BG).setOrigin(0);
+
+    // Back button — top-left, matching Game scene style
+    const backBg = this.add
+      .rectangle(12, 12, 130, 40, 0x000000, 0.75)
+      .setStrokeStyle(2, 0xf5a623)
+      .setOrigin(0)
+      .setInteractive();
+    this.add
+      .text(20, 32, "< Festivales", { fontSize: "14px", color: "#f5a623" })
+      .setOrigin(0, 0.5);
+    backBg.on("pointerdown", () => this.scene.start("FestivalSelect"));
+    backBg.on("pointerover", () => backBg.setFillStyle(0x000000, 1));
+    backBg.on("pointerout", () => backBg.setFillStyle(0x000000, 0.75));
 
     this.container = this.add.container(width / 2, height / 2);
 
@@ -194,6 +215,6 @@ export class CharacterSelect extends Scene {
 
   private startGame() {
     const character = CHARACTERS[this.selectedIndex].key;
-    this.scene.start("Game", { character });
+    this.scene.start("Game", { character, festivalId: this.festivalId });
   }
 }
