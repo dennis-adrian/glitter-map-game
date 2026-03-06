@@ -59,7 +59,33 @@ export class Game extends Scene {
   }
 
   preload() {
-    // Load the map and tileset
+    // ── Loading screen ────────────────────────────────────────────────────────
+    const { width, height } = this.scale;
+
+    const loadingBg = this.add.rectangle(0, 0, width, height, 0x1a1a2e).setOrigin(0);
+
+    const loadingText = this.add
+      .text(width / 2, height / 2, "Cargando…", {
+        fontSize: "22px",
+        color: "#f5a623",
+        fontStyle: "bold",
+      })
+      .setOrigin(0.5);
+
+    this.tweens.add({
+      targets: loadingText,
+      alpha: 0.3,
+      duration: 700,
+      yoyo: true,
+      repeat: -1,
+    });
+
+    this.load.once("complete", () => {
+      loadingBg.destroy();
+      loadingText.destroy();
+    });
+
+    // ── Assets ────────────────────────────────────────────────────────────────
     this.load.tilemapTiledJSON("map", "assets/map_glitter.json");
     this.load.image("tileset1", "assets/tileset.png");
     this.load.image("mesas", "assets/mesas.png");
