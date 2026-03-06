@@ -1,4 +1,5 @@
 import { Scene } from "phaser";
+import { uiTheme } from "../theme";
 
 const CHARACTERS = [
   { key: "federico", label: "Federico" },
@@ -11,11 +12,6 @@ const CARD_GAP = 32;
 const SPRITE_SCALE = 2;
 const FRAME_W = 32;
 const FRAME_H = 52;
-const COLOR_BG = 0x1a1a2e;
-const COLOR_SELECTED = 0xf5a623;
-const COLOR_UNSELECTED = 0x333344;
-const COLOR_GOLD_TEXT = "#f5a623";
-
 export class CharacterSelect extends Scene {
   private selectedIndex = 0;
   private cards: Phaser.GameObjects.Container[] = [];
@@ -73,20 +69,27 @@ export class CharacterSelect extends Scene {
   private buildUI() {
     const { width, height } = this.scale;
 
-    this.add.rectangle(0, 0, width, height, COLOR_BG).setOrigin(0);
+    this.add.rectangle(0, 0, width, height, uiTheme.colors.bgCanvas).setOrigin(0);
 
     // Back button — top-left, matching Game scene style
     const backBg = this.add
-      .rectangle(12, 12, 130, 40, 0x000000, 0.75)
-      .setStrokeStyle(2, 0xf5a623)
+      .rectangle(12, 12, 130, 40, uiTheme.colors.surface, uiTheme.alpha.surface)
+      .setStrokeStyle(2, uiTheme.colors.borderStrong)
       .setOrigin(0)
       .setInteractive();
     this.add
-      .text(20, 32, "< Festivales", { fontSize: "14px", color: "#f5a623" })
+      .text(20, 32, "< Festivales", {
+        fontSize: "14px",
+        color: uiTheme.text.accent,
+      })
       .setOrigin(0, 0.5);
     backBg.on("pointerdown", () => this.scene.start("FestivalSelect"));
-    backBg.on("pointerover", () => backBg.setFillStyle(0x000000, 1));
-    backBg.on("pointerout", () => backBg.setFillStyle(0x000000, 0.75));
+    backBg.on("pointerover", () =>
+      backBg.setFillStyle(uiTheme.colors.accentSoft, 1),
+    );
+    backBg.on("pointerout", () =>
+      backBg.setFillStyle(uiTheme.colors.surface, uiTheme.alpha.surface),
+    );
 
     this.container = this.add.container(width / 2, height / 2);
 
@@ -94,7 +97,7 @@ export class CharacterSelect extends Scene {
     const title = this.add
       .text(0, -CARD_H / 2 - 60, "Elije tu personaje", {
         fontSize: "22px",
-        color: COLOR_GOLD_TEXT,
+        color: uiTheme.text.accent,
         fontStyle: "bold",
       })
       .setOrigin(0.5);
@@ -126,8 +129,15 @@ export class CharacterSelect extends Scene {
     const card = this.add.container(0, 0);
 
     const bg = this.add
-      .rectangle(0, 0, CARD_W, CARD_H, COLOR_UNSELECTED, 0.7)
-      .setStrokeStyle(3, COLOR_UNSELECTED);
+      .rectangle(
+        0,
+        0,
+        CARD_W,
+        CARD_H,
+        uiTheme.colors.surface,
+        uiTheme.alpha.unselected,
+      )
+      .setStrokeStyle(3, uiTheme.colors.border);
 
     const sprite = this.add
       .sprite(0, -16, key, 0)
@@ -138,7 +148,7 @@ export class CharacterSelect extends Scene {
     const nameText = this.add
       .text(0, CARD_H / 2 - 20, label, {
         fontSize: "14px",
-        color: "#ffffff",
+        color: uiTheme.text.primary,
       })
       .setOrigin(0.5);
 
@@ -156,13 +166,20 @@ export class CharacterSelect extends Scene {
     const btn = this.add.container(0, 0);
 
     const bg = this.add
-      .rectangle(0, 0, 140, 44, COLOR_SELECTED, 0.15)
-      .setStrokeStyle(2, COLOR_SELECTED);
+      .rectangle(
+        0,
+        0,
+        140,
+        44,
+        uiTheme.colors.surface,
+        uiTheme.alpha.button,
+      )
+      .setStrokeStyle(2, uiTheme.colors.borderStrong);
 
     const label = this.add
       .text(0, 0, "Ir al mapa", {
         fontSize: "18px",
-        color: COLOR_GOLD_TEXT,
+        color: uiTheme.text.accent,
         fontStyle: "bold",
       })
       .setOrigin(0.5);
@@ -171,8 +188,10 @@ export class CharacterSelect extends Scene {
     btn.setSize(140, 44);
     btn.setInteractive();
     btn.on("pointerdown", () => this.startGame());
-    btn.on("pointerover", () => bg.setFillStyle(COLOR_SELECTED, 0.3));
-    btn.on("pointerout", () => bg.setFillStyle(COLOR_SELECTED, 0.15));
+    btn.on("pointerover", () => bg.setFillStyle(uiTheme.colors.accentSoft, 1));
+    btn.on("pointerout", () =>
+      bg.setFillStyle(uiTheme.colors.surface, uiTheme.alpha.button),
+    );
 
     return btn;
   }
@@ -194,12 +213,15 @@ export class CharacterSelect extends Scene {
   private refreshSelection() {
     this.cards.forEach((card, i) => {
       const bg = card.getAt(0) as Phaser.GameObjects.Rectangle;
+      const label = card.getAt(2) as Phaser.GameObjects.Text;
       if (i === this.selectedIndex) {
-        bg.setStrokeStyle(3, COLOR_SELECTED);
-        bg.setFillStyle(COLOR_SELECTED, 0.15);
+        bg.setStrokeStyle(3, uiTheme.colors.borderStrong);
+        bg.setFillStyle(uiTheme.colors.accentPrimary, uiTheme.alpha.selected);
+        label.setColor(uiTheme.text.accent);
       } else {
-        bg.setStrokeStyle(3, COLOR_UNSELECTED);
-        bg.setFillStyle(COLOR_UNSELECTED, 0.7);
+        bg.setStrokeStyle(3, uiTheme.colors.border);
+        bg.setFillStyle(uiTheme.colors.surface, uiTheme.alpha.unselected);
+        label.setColor(uiTheme.text.primary);
       }
     });
   }

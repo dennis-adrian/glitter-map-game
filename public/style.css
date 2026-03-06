@@ -1,8 +1,9 @@
 body {
     margin: 0;
     padding: 0;
-    color: rgba(255, 255, 255, 0.87);
-    background-color: #0f0f0f;
+    color: #372654;
+    background:
+        radial-gradient(circle at top, #ffffff 0%, #f1edf8 42%, #f7f5fa 100%);
 }
 
 #app {

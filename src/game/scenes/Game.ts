@@ -1,5 +1,6 @@
 import { Scene } from "phaser";
 import { type FestivalStand } from "../../types/stands";
+import { uiTheme } from "../theme";
 
 function standCacheKey(stand: FestivalStand): string {
   return `stand_${(stand.standLabel ?? "").toLowerCase()}${stand.standNumber}`;
@@ -62,12 +63,14 @@ export class Game extends Scene {
     // ── Loading screen ────────────────────────────────────────────────────────
     const { width, height } = this.scale;
 
-    const loadingBg = this.add.rectangle(0, 0, width, height, 0x1a1a2e).setOrigin(0);
+    const loadingBg = this.add
+      .rectangle(0, 0, width, height, uiTheme.colors.bgCanvas)
+      .setOrigin(0);
 
     const loadingText = this.add
       .text(width / 2, height / 2, "Cargando…", {
         fontSize: "22px",
-        color: "#f5a623",
+        color: uiTheme.text.accent,
         fontStyle: "bold",
       })
       .setOrigin(0.5);
@@ -335,31 +338,35 @@ export class Game extends Scene {
     // Back button — top-left corner, standalone objects on the scene display list
     // (not inside a Container) so Phaser's input system can hit-test them.
     this.backBtnBg = this.add
-      .rectangle(12, 12, 120, 40, 0x000000, 0.75)
-      .setStrokeStyle(2, 0xf5a623)
+      .rectangle(12, 12, 120, 40, uiTheme.colors.surface, uiTheme.alpha.surface)
+      .setStrokeStyle(2, uiTheme.colors.borderStrong)
       .setOrigin(0)
       .setScrollFactor(0)
       .setDepth(20)
       .setInteractive();
     this.backBtnLabel = this.add
-      .text(20, 32, "< Personajes", { fontSize: "14px", color: "#f5a623" })
+      .text(20, 32, "< Personajes", {
+        fontSize: "14px",
+        color: uiTheme.text.accent,
+      })
       .setOrigin(0, 0.5)
       .setScrollFactor(0)
       .setDepth(21);
     this.backBtnBg.on("pointerdown", () => this.scene.start("CharacterSelect"));
     this.backBtnBg.on("pointerover", () =>
-      this.backBtnBg.setFillStyle(0x000000, 1),
+      this.backBtnBg.setFillStyle(uiTheme.colors.accentSoft, 1),
     );
     this.backBtnBg.on("pointerout", () =>
-      this.backBtnBg.setFillStyle(0x000000, 0.75),
+      this.backBtnBg.setFillStyle(uiTheme.colors.surface, uiTheme.alpha.surface),
     );
 
     // Drag indicator - follows pointer position while dragging
     this.dragIndicator = this.add
-      .circle(0, 0, 24, 0xffffff, 0.25)
+      .circle(0, 0, 24, uiTheme.colors.accentPrimary, 0.12)
       .setScrollFactor(0)
       .setDepth(10)
       .setVisible(false);
+    this.dragIndicator.setStrokeStyle(2, uiTheme.colors.borderStrong, 0.55);
   }
 
   private showPopup(data: FestivalStand) {
@@ -383,7 +390,7 @@ export class Game extends Scene {
     const titleText = this.add
       .text(centerX, relY, data.standDisplayLabel, {
         fontSize: `${Math.round(baseFontSize * 1.3)}px`,
-        color: "#f5a623",
+        color: uiTheme.text.accent,
         fontStyle: "bold",
         align: "center",
         wordWrap: { width: popupWidth - padding * 2 },
@@ -401,8 +408,8 @@ export class Game extends Scene {
           relY + 6,
           popupWidth - padding * 4,
           1,
-          0x444455,
-          0.8,
+          uiTheme.colors.border,
+          0.9,
         );
         relY += 14;
         contentItems.push(divider);
@@ -416,13 +423,14 @@ export class Game extends Scene {
         centerX,
         avatarRelCenterY,
         avatarRadius,
-        0xf5a623,
-        0.25,
+        uiTheme.colors.surfaceMuted,
+        uiTheme.alpha.avatar,
       );
+      avatar.setStrokeStyle(2, uiTheme.colors.borderStrong, 0.9);
       const avatarInitial = this.add
         .text(centerX, avatarRelCenterY, initial, {
           fontSize: `${Math.round(baseFontSize * 1.2)}px`,
-          color: "#f5a623",
+          color: uiTheme.text.accent,
           fontStyle: "bold",
         })
         .setOrigin(0.5);
@@ -433,7 +441,7 @@ export class Game extends Scene {
         const nameText = this.add
           .text(centerX, relY, participant.displayName, {
             fontSize: `${Math.round(baseFontSize * 1.1)}px`,
-            color: "#f5a623",
+            color: uiTheme.text.primary,
             fontStyle: "bold",
             align: "center",
             wordWrap: { width: popupWidth - padding * 2 },
@@ -447,7 +455,7 @@ export class Game extends Scene {
         const categoryText = this.add
           .text(centerX, relY, participant.category, {
             fontSize: `${baseFontSize}px`,
-            color: "#aaaaaa",
+            color: uiTheme.text.secondary,
             align: "center",
           })
           .setOrigin(0.5, 0);
@@ -457,7 +465,9 @@ export class Game extends Scene {
 
       for (const social of participant.socials) {
         const color =
-          social.type.toLowerCase() === "instagram" ? "#c084fc" : "#ffffff";
+          social.type.toLowerCase() === "instagram"
+            ? uiTheme.text.instagram
+            : uiTheme.text.accent;
         const socialText = this.add
           .text(centerX, relY, `@${social.username}`, {
             fontSize: `${baseFontSize}px`,
@@ -510,14 +520,21 @@ export class Game extends Scene {
       height / 2,
       width,
       height,
-      0x000000,
-      0.5,
+      uiTheme.colors.overlay,
+      uiTheme.alpha.overlay,
     );
 
     // ── Background panel ───────────────────────────────────────────────────────
     const bg = this.add
-      .rectangle(centerX, popupCenterY, popupWidth, popupHeight, 0x1a1a2e, 0.95)
-      .setStrokeStyle(2, 0xf5a623);
+      .rectangle(
+        centerX,
+        popupCenterY,
+        popupWidth,
+        popupHeight,
+        uiTheme.colors.surface,
+        uiTheme.alpha.surfaceStrong,
+      )
+      .setStrokeStyle(2, uiTheme.colors.borderStrong);
 
     // ── Close button ───────────────────────────────────────────────────────────
     const closeBg = this.add.rectangle(
@@ -525,65 +542,18 @@ export class Game extends Scene {
       closeBtnY,
       44,
       44,
-      0x333344,
-      0.6,
+      uiTheme.colors.surface,
+      uiTheme.alpha.surface,
     );
+    closeBg.setStrokeStyle(2, uiTheme.colors.borderStrong);
     const closeIcon = this.add
       .text(closeBtnX, closeBtnY, "✕", {
         fontSize: `${Math.round(baseFontSize * 1.1)}px`,
-        color: "#ffffff",
+        color: uiTheme.text.accent,
       })
       .setOrigin(0.5);
 
     this.standPopup.add([overlay, bg, ...contentItems, closeBg, closeIcon]);
-    this.standPopup.setVisible(true);
-  }
-
-  private showLoading() {
-    const { width, height } = this.scale;
-    this.standPopup.removeAll(true);
-
-    const popupWidth = Math.min(width - 32, 480);
-    const popupHeight = 80;
-    const popupTop = height - popupHeight - 16;
-
-    // No close button during loading — point it off-screen so it never matches
-    this.closeBtnBounds = { x: -999, y: -999, halfSize: 22 };
-    this.popupBounds = {
-      top: popupTop,
-      bottom: popupTop + popupHeight,
-      left: width / 2 - popupWidth / 2,
-      right: width / 2 + popupWidth / 2,
-    };
-
-    const overlay = this.add.rectangle(
-      width / 2,
-      height / 2,
-      width,
-      height,
-      0x000000,
-      0.5,
-    );
-
-    const bg = this.add
-      .rectangle(
-        width / 2,
-        popupTop + popupHeight / 2,
-        popupWidth,
-        popupHeight,
-        0x1a1a2e,
-        0.95,
-      )
-      .setStrokeStyle(2, 0xf5a623);
-
-    const loadingText = this.add
-      .text(width / 2, popupTop + popupHeight / 2, "Loading…", {
-        fontSize: "16px",
-        color: "#aaaaaa",
-      })
-      .setOrigin(0.5);
-
-    this.standPopup.add([overlay, bg, loadingText]);
     this.standPopup.setVisible(true);
   }
 
