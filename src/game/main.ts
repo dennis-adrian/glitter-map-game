@@ -1,5 +1,6 @@
 import { Game as MainGame } from "./scenes/Game";
 import { CharacterSelect } from "./scenes/CharacterSelect";
+import { FestivalSelect } from "./scenes/FestivalSelect";
 import { AUTO, Game, Scale, Types } from "phaser";
 
 // Find out more information about the Game Config at:
@@ -21,7 +22,7 @@ const config: Types.Core.GameConfig = {
     mode: Scale.RESIZE,
     autoCenter: Scale.CENTER_BOTH,
   },
-  scene: [CharacterSelect, MainGame],
+  scene: [FestivalSelect, CharacterSelect, MainGame],
 };
 
 const StartGame = (parent: string) => {
