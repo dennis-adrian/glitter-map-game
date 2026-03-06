@@ -1,7 +1,7 @@
 import { Scene } from "phaser";
 import { uiTheme } from "../theme";
 
-const FESTIVALS = [{ id: 482, name: "Festival Glitter 9na Edición" }];
+const FESTIVALS = [{ id: 484, name: "Festival Glitter 9na Edición" }];
 
 const CARD_W = 220;
 const CARD_H = 80;
@@ -39,7 +39,9 @@ export class FestivalSelect extends Scene {
   private buildUI() {
     const { width, height } = this.scale;
 
-    this.add.rectangle(0, 0, width, height, uiTheme.colors.bgCanvas).setOrigin(0);
+    this.add
+      .rectangle(0, 0, width, height, uiTheme.colors.bgCanvas)
+      .setOrigin(0);
 
     this.container = this.add.container(width / 2, height / 2);
 
@@ -108,14 +110,7 @@ export class FestivalSelect extends Scene {
     const btn = this.add.container(0, 0);
 
     const bg = this.add
-      .rectangle(
-        0,
-        0,
-        140,
-        44,
-        uiTheme.colors.surface,
-        uiTheme.alpha.button,
-      )
+      .rectangle(0, 0, 140, 44, uiTheme.colors.surface, uiTheme.alpha.button)
       .setStrokeStyle(2, uiTheme.colors.borderStrong);
 
     const label = this.add

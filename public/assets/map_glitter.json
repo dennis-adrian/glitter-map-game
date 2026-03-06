@@ -121,7 +121,7 @@
                 {
                  "height":64,
                  "id":7,
-                 "name":"stand_a09",
+                 "name":"stand_a9",
                  "rotation":0,
                  "type":"",
                  "visible":true,
@@ -132,7 +132,7 @@
                 {
                  "height":32,
                  "id":9,
-                 "name":"stand_07",
+                 "name":"stand_a7",
                  "rotation":0,
                  "type":"",
                  "visible":true,
@@ -143,7 +143,7 @@
                 {
                  "height":32,
                  "id":10,
-                 "name":"stand_a08",
+                 "name":"stand_a8",
                  "rotation":0,
                  "type":"",
                  "visible":true,
@@ -154,7 +154,7 @@
                 {
                  "height":32,
                  "id":11,
-                 "name":"stand_05",
+                 "name":"stand_a5",
                  "rotation":0,
                  "type":"",
                  "visible":true,
@@ -165,7 +165,7 @@
                 {
                  "height":32,
                  "id":12,
-                 "name":"stand_06",
+                 "name":"stand_a6",
                  "rotation":0,
                  "type":"",
                  "visible":true,
@@ -176,7 +176,7 @@
                 {
                  "height":32,
                  "id":13,
-                 "name":"stand_01",
+                 "name":"stand_a1",
                  "rotation":0,
                  "type":"",
                  "visible":true,
@@ -187,7 +187,7 @@
                 {
                  "height":32,
                  "id":14,
-                 "name":"stand_02",
+                 "name":"stand_a2",
                  "rotation":0,
                  "type":"",
                  "visible":true,
@@ -198,7 +198,7 @@
                 {
                  "height":32,
                  "id":15,
-                 "name":"stand_03",
+                 "name":"stand_a3",
                  "rotation":0,
                  "type":"",
                  "visible":true,
@@ -209,7 +209,7 @@
                 {
                  "height":32,
                  "id":16,
-                 "name":"stand_04",
+                 "name":"stand_a4",
                  "rotation":0,
                  "type":"",
                  "visible":true,

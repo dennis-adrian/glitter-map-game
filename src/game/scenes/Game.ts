@@ -39,11 +39,23 @@ export class Game extends Scene {
   private standsLayer!: Phaser.Tilemaps.ObjectLayer;
   private activeStand: string | null = null;
   private standDataCache: Map<string, FestivalStand> = new Map();
+  private standLabels: Map<
+    string,
+    {
+      container: Phaser.GameObjects.Container;
+      bg: Phaser.GameObjects.Rectangle;
+      nameText: Phaser.GameObjects.Text;
+    }
+  > = new Map();
 
   // UI
   private standPopup!: Phaser.GameObjects.Container;
   private backBtnBg!: Phaser.GameObjects.Rectangle;
   private backBtnLabel!: Phaser.GameObjects.Text;
+  private interactPrompt!: Phaser.GameObjects.Container;
+  private interactPromptBg!: Phaser.GameObjects.Rectangle;
+  private interactPromptText!: Phaser.GameObjects.Text;
+  private interactKey!: Phaser.Input.Keyboard.Key;
   private isPopupOpen = false;
   private closeBtnBounds = { x: 0, y: 0, halfSize: 22 };
   private popupBounds = { top: 0, bottom: 0, left: 0, right: 0 };
@@ -51,6 +63,8 @@ export class Game extends Scene {
   // Zone-exit tracking (prevents popup from reopening while player stays in zone)
   private currentOverlaps = new Set<string>();
   private previousOverlaps = new Set<string>();
+  private zoneExitFrames = 0;
+  private readonly ZONE_EXIT_DELAY = 5;
 
   // Constants
   private readonly PLAYER_SPEED = 160;
@@ -147,8 +161,14 @@ export class Game extends Scene {
       this.backBtnBg,
       this.backBtnLabel,
       this.dragIndicator!,
+      this.interactPrompt,
     ]);
-    this.uiCamera.ignore([this.floorLayer, this.structuresLayer, this.player]);
+    this.uiCamera.ignore([
+      this.floorLayer,
+      this.structuresLayer,
+      this.player,
+      ...[...this.standLabels.values()].map((l) => l.container),
+    ]);
   }
 
   private createMap() {
@@ -294,15 +314,73 @@ export class Game extends Scene {
       (zone.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
       (zone.body as Phaser.Physics.Arcade.Body).moves = false;
 
-      // When player overlaps a stand zone, trigger the interaction
+      // When player overlaps a stand zone, show interact prompt
       this.physics.add.overlap(this.player, zone, () => {
         if (standObj.name) this.currentOverlaps.add(standObj.name);
         if (!this.isPopupOpen && this.activeStand !== standObj.name) {
+          if (this.activeStand) this.hideInteractPrompt(); // restore previous label
           this.activeStand = standObj.name!;
-          this.openStandPopup(standObj.name!);
+          const data = this.standDataCache.get(standObj.name!);
+          if (data) this.showInteractPrompt();
         }
       });
+
+      // Floating label above the zone (only for stands with cached data)
+      const standData = this.standDataCache.get(standObj.name!);
+      if (standData) {
+        const lbl = this.createStandLabel(standObj, standData.standDisplayLabel);
+        this.standLabels.set(standObj.name!, lbl);
+      }
     });
+  }
+
+  private createStandLabel(
+    standObj: Phaser.Types.Tilemaps.TiledObject,
+    displayLabel: string,
+  ): {
+    container: Phaser.GameObjects.Container;
+    bg: Phaser.GameObjects.Rectangle;
+    nameText: Phaser.GameObjects.Text;
+  } {
+    const x = standObj.x! + standObj.width! / 2;
+    const y = standObj.y! - 18;
+
+    const label =
+      displayLabel.length > 18 ? displayLabel.slice(0, 18) + "…" : displayLabel;
+
+    const text = this.add
+      .text(0, 0, label, {
+        fontSize: "10px",
+        color: uiTheme.text.accent,
+        fontStyle: "bold",
+      })
+      .setOrigin(0.5);
+
+    const padX = 8;
+    const padY = 5;
+    const bg = this.add
+      .rectangle(
+        0,
+        0,
+        text.width + padX * 2,
+        text.height + padY * 2,
+        uiTheme.colors.surface,
+        1,
+      )
+      .setStrokeStyle(1.5, uiTheme.colors.borderStrong);
+
+    const container = this.add.container(x, y, [bg, text]).setDepth(3);
+
+    this.tweens.add({
+      targets: container,
+      y: y - 4,
+      duration: 900,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+
+    return { container, bg, nameText: text };
   }
 
   private openStandPopup(standId: string) {
@@ -324,6 +402,34 @@ export class Game extends Scene {
       this.isPopupOpen = false;
       this.activeStand = null;
     }
+  }
+
+  private showInteractPrompt() {
+    this.interactPrompt.setVisible(true);
+    const lbl = this.activeStand ? this.standLabels.get(this.activeStand) : null;
+    if (lbl) {
+      lbl.bg.setFillStyle(uiTheme.colors.accentPrimary, 1);
+      lbl.bg.setStrokeStyle(0);
+      lbl.nameText.setColor("#ffffff");
+    }
+  }
+
+  private hideInteractPrompt() {
+    this.interactPrompt.setVisible(false);
+    if (this.activeStand) {
+      const lbl = this.standLabels.get(this.activeStand);
+      if (lbl) {
+        lbl.bg.setFillStyle(uiTheme.colors.surface, 1);
+        lbl.bg.setStrokeStyle(1.5, uiTheme.colors.borderStrong);
+        lbl.nameText.setColor(uiTheme.text.accent);
+      }
+    }
+  }
+
+  private triggerStandInteraction() {
+    if (!this.activeStand || this.isPopupOpen) return;
+    this.hideInteractPrompt();
+    this.openStandPopup(this.activeStand);
   }
 
   // ─── UI ──────────────────────────────────────────────────────────────────
@@ -357,7 +463,10 @@ export class Game extends Scene {
       this.backBtnBg.setFillStyle(uiTheme.colors.accentSoft, 1),
     );
     this.backBtnBg.on("pointerout", () =>
-      this.backBtnBg.setFillStyle(uiTheme.colors.surface, uiTheme.alpha.surface),
+      this.backBtnBg.setFillStyle(
+        uiTheme.colors.surface,
+        uiTheme.alpha.surface,
+      ),
     );
 
     // Drag indicator - follows pointer position while dragging
@@ -367,6 +476,45 @@ export class Game extends Scene {
       .setDepth(10)
       .setVisible(false);
     this.dragIndicator.setStrokeStyle(2, uiTheme.colors.borderStrong, 0.55);
+
+    // Interact prompt — appears when player enters a stand zone
+    const promptY = this.scale.height - 72;
+    const padX = 24;
+    const padY = 14;
+    this.interactPromptText = this.add
+      .text(this.scale.width / 2, promptY, "Presiona para ver el stand", {
+        fontSize: "13px",
+        color: "#ffffff",
+        fontStyle: "bold",
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(21);
+    this.interactPromptBg = this.add
+      .rectangle(
+        this.scale.width / 2,
+        promptY,
+        this.interactPromptText.width + padX * 2,
+        this.interactPromptText.height + padY * 2,
+        uiTheme.colors.accentPrimary,
+        1,
+      )
+      .setScrollFactor(0)
+      .setDepth(20)
+      .setInteractive();
+    this.interactPrompt = this.add
+      .container(0, 0, [this.interactPromptBg, this.interactPromptText])
+      .setScrollFactor(0)
+      .setVisible(false);
+    this.interactPromptBg.on("pointerdown", () =>
+      this.triggerStandInteraction(),
+    );
+    this.interactPromptBg.on("pointerover", () =>
+      this.interactPromptBg.setFillStyle(uiTheme.colors.accentHover, 1),
+    );
+    this.interactPromptBg.on("pointerout", () =>
+      this.interactPromptBg.setFillStyle(uiTheme.colors.accentPrimary, 1),
+    );
   }
 
   private showPopup(data: FestivalStand) {
@@ -590,6 +738,20 @@ export class Game extends Scene {
       if (this.isPopupOpen) this.closePopup();
     });
 
+    // Interact key (E) — opens stand popup when in a zone
+    this.interactKey = this.input.keyboard!.addKey(
+      Phaser.Input.Keyboard.KeyCodes.E,
+    );
+
+    // On first keyboard input, reveal the E key hint and resize the button to fit
+    this.input.keyboard!.once("keydown", () => {
+      this.interactPromptText.setText("Presiona para ver el stand  ·  E");
+      this.interactPromptBg.setSize(
+        this.interactPromptText.width + 24 * 2,
+        this.interactPromptBg.height,
+      );
+    });
+
     // Touch / drag-to-move
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
       if (this.isPopupOpen) {
@@ -624,6 +786,12 @@ export class Game extends Scene {
     });
 
     this.input.on("pointerup", () => {
+      // A tap (no significant drag) while in a stand zone triggers the interaction
+      const isTap =
+        Math.abs(this.touchDeltaX) <= this.touchDeadzone &&
+        Math.abs(this.touchDeltaY) <= this.touchDeadzone;
+      if (isTap && !this.isPopupOpen) this.triggerStandInteraction();
+
       this.touchActive = false;
       this.touchDecay = 1.0; // begin deceleration — deltas preserved briefly
       this.dragIndicator?.setVisible(false);
@@ -641,11 +809,17 @@ export class Game extends Scene {
   // ─── UPDATE ──────────────────────────────────────────────────────────────
 
   update() {
-    // Reset activeStand only when player physically leaves a zone (not on popup close)
-    for (const zone of this.previousOverlaps) {
-      if (!this.currentOverlaps.has(zone) && this.activeStand === zone) {
+    // Reset activeStand only when player physically leaves a zone (not on popup close).
+    // Grace counter debounces physics edge noise — zone must be absent for N frames.
+    if (this.activeStand && !this.currentOverlaps.has(this.activeStand)) {
+      this.zoneExitFrames++;
+      if (this.zoneExitFrames >= this.ZONE_EXIT_DELAY) {
+        this.hideInteractPrompt(); // restore label before clearing activeStand
         this.activeStand = null;
+        this.zoneExitFrames = 0;
       }
+    } else {
+      this.zoneExitFrames = 0;
     }
     this.previousOverlaps = new Set(this.currentOverlaps);
     this.currentOverlaps.clear();
@@ -654,6 +828,11 @@ export class Game extends Scene {
       this.player.setVelocity(0, 0);
       this.player.anims.play("idle", true);
       return;
+    }
+
+    // E key triggers stand interaction
+    if (Phaser.Input.Keyboard.JustDown(this.interactKey)) {
+      this.triggerStandInteraction();
     }
 
     this.handleMovement();
