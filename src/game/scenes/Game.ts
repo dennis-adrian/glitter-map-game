@@ -343,7 +343,7 @@ export class Game extends Scene {
     nameText: Phaser.GameObjects.Text;
   } {
     const x = standObj.x! + standObj.width! / 2;
-    const y = standObj.y! - 18;
+    const y = standObj.y! + standObj.height! - 18;
 
     const label =
       displayLabel.length > 18 ? displayLabel.slice(0, 18) + "…" : displayLabel;
